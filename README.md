@@ -5,6 +5,8 @@
 
 **Note: This is an experimental prototype. NOT ready for production.**
 
+Add AutoJib as a dependency and your application will containerize itself.
+
 # Quickstart
 
 Install:
