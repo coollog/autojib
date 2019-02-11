@@ -3,56 +3,71 @@
 
 # AutoJib
 
-**Note: This is an experimental prototype. NOT ready for production.**
+**Note: This is just an example. Do NOT ready for production.**
 
 Add AutoJib as a dependency and your application will containerize itself.
 
 # Quickstart
 
-Install:
+Install AutoJib into your local Maven repository:
 
 ```bash
 ./gradlew install
 ```
 
-Add AutoJib as dependency:
+In your Java application, add AutoJib as dependency:
+
+`pom.xml`
+```xml
+<dependency>
+  <groupId>com.google.cloud.tools.examples.autojib</groupId>
+  <artifactId>autojib</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+</dependency>
+```
 
 `build.gradle`
 ```groovy
 dependencies {
-  implementation 'coollog.experiments:autojib:0.1.0-SNAPSHOT'
+  implementation 'com.google.cloud.tools.examples.autojib:autojib:0.1.0-SNAPSHOT'
 }
 ```
 
-Run with AutoJib main class:
+Configure your application to run with the AutoJib main class:
 
 `build.gradle`
 ```groovy
-task run(type: JavaExec) {
-  classpath = sourceSets.main.runtimeClasspath
-  main = 'coollog.experiments.autojib.Main'
-  environment AUTOJIB_IMAGE: <YOUR IMAGE>
+plugins {
+  id 'application'
+}
+
+mainClassName = 'com.google.cloud.tools.examples.autojib.Main'
+run {
+  systemProperty 'autojibImage': 'YOUR IMAGE'
 }
 ```
 
-Self-containerize:
+Run your application and it will containerize itself:
 
 ```bash
 $ gradle run
 ``` 
 
-# Example app
+If you run your application with arguments, those arguments will be used for the container execution as well.
 
-`test-app/build.gradle` - play around with `run` task configuration.
+## Demo
+
+`demo/build.gradle` - play around with `run` task configuration.
 
 Self-containerize:
 
 ```bash
-(cd test-app && ./gradlew run)
+$ IMAGE=<YOUR IMAGE>
+$ (cd demo && ./gradlew run -DautojibImage=${IMAGE})
 ```
 
 Use docker to run the built image:
 
 ```bash
-docker run ${AUTOJIB_IMAGE}
+docker run ${IMAGE}
 ```

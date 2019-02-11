@@ -49,42 +49,36 @@ import javax.annotation.Nullable;
 /**
  * Use this as the main class when you want to self-containerize.
  *
- * <p>Set environment variables:
+ * <p>Configure the containerization with system properties:
  *
  * <ul>
- *   <li>{@code AUTOJIB_IMAGE} - image to containerize to
- *   <li>{@code AUTOJIB_BASE_IMAGE} - base image
- *   <li>{@code AUTOJIB_BUILD_TO_DOCKER} - {@code false} (default); use {@code true} to build to
- *       Docker daemon
- *   <li>{@code AUTOJIB_REGISTRY_USERNAME} (optional) - registry username
- *   <li>{@code AUTOJIB_REGISTRY_PASSWORD} (optional) - registry password
+ *   <li>{@code autojibImage} - image to containerize to
+ *   <li>{@code autojibBaseImage} - base image
+ *   <li>{@code autojibBuildToDocker} - {@code false} (default); use {@code true} to build to Docker
+ *       daemon
+ *   <li>{@code autojibRegistryUsername} (optional) - registry username
+ *   <li>{@code autojibRegistryPassword} (optional) - registry password
  * </ul>
  */
 public class Main {
 
   private static class Configuration {
 
-    private static Configuration processEnvironment() throws InvalidImageReferenceException {
-      String imageReferenceString = System.getenv("AUTOJIB_IMAGE");
+    private static Configuration processSystemProperties() throws InvalidImageReferenceException {
+      String imageReferenceString = System.getProperty("autojibImage");
       if (imageReferenceString == null) {
-        throw new IllegalArgumentException("must set AUTOJIB_IMAGE env var");
+        throw new IllegalArgumentException("must set autojibImage system property");
       }
       ImageReference imageReference = ImageReference.parse(imageReferenceString);
 
-      String baseImageReferenceString = System.getenv("AUTOJIB_BASE_IMAGE");
-      ImageReference baseImageReference = ImageReference.parse("gcr.io/distroless/java");
-      if (baseImageReferenceString != null) {
-        baseImageReference = ImageReference.parse(baseImageReferenceString);
-      }
+      ImageReference baseImageReference =
+          ImageReference.parse(System.getProperty("autojibBaseImage", "gcr.io/distroless/java"));
 
-      String buildToDockerString = System.getenv("AUTOJIB_BUILD_TO_DOCKER");
-      boolean buildToDocker = false;
-      if (buildToDockerString != null) {
-        buildToDocker = Boolean.parseBoolean(buildToDockerString);
-      }
+      boolean buildToDocker =
+          Boolean.parseBoolean(System.getProperty("autojibBuildToDocker", "false"));
 
-      String registryUsername = System.getenv("AUTOJIB_REGISTRY_USERNAME");
-      String registryPassword = System.getenv("AUTOJIB_REGISTRY_PASSWORD");
+      String registryUsername = System.getProperty("autojibRegistryUsername");
+      String registryPassword = System.getProperty("autojibRegistryPassword");
 
       return new Configuration(
           imageReference, baseImageReference, buildToDocker, registryUsername, registryPassword);
@@ -117,8 +111,8 @@ public class Main {
    */
   public static void main(String[] args)
       throws IOException, InvalidImageReferenceException, InterruptedException, ExecutionException,
-          CacheDirectoryCreationException {
-    Configuration configuration = Configuration.processEnvironment();
+      CacheDirectoryCreationException {
+    Configuration configuration = Configuration.processSystemProperties();
 
     // Pass LogEvents to stderr.
     EventHandlers eventHandlers =
@@ -139,18 +133,20 @@ public class Main {
     // Creates an thread pool to run on.
     ExecutorService executorService = Executors.newCachedThreadPool();
 
-    // Builds the container image.
+    // Generates the container entrypoint.
     List<String> entrypoint = new ArrayList<>();
     entrypoint.addAll(Arrays.asList("java", "-cp", "/app/:/app/*", mainClass));
     entrypoint.addAll(Arrays.asList(args));
 
     Containerizer containerizer;
     if (configuration.buildToDocker) {
+      // Configures build to Docker daemon.
       containerizer = Containerizer.to(DockerDaemonImage.named(configuration.targetImageReference));
 
     } else {
+      // Configures build to registry with adequate credential retrievers.
       RegistryImage registryImage = RegistryImage.named(configuration.targetImageReference);
-      if (configuration.registryUsername != null) {
+      if (configuration.registryUsername != null && configuration.registryPassword != null) {
         registryImage.addCredential(configuration.registryUsername, configuration.registryPassword);
       }
       CredentialRetrieverFactory credentialRetrieverFactory =
@@ -162,6 +158,7 @@ public class Main {
       containerizer = Containerizer.to(registryImage);
     }
 
+    // Executes the Jib build.
     DescriptorDigest descriptorDigest =
         Jib.from(configuration.baseImageReference)
             .addLayer(classpathFiles, AbsoluteUnixPath.get("/app"))
@@ -189,9 +186,16 @@ public class Main {
     System.out.println(configuration.targetImageReference + "@" + descriptorDigest);
   }
 
+  /**
+   * Finds a {@code .class} file with {@code public static void main} within a list of files.
+   *
+   * @param classpathFiles the files to search
+   * @param eventDispatcher an event dispatcher to listen to events emitted during the search
+   * @return the found main class
+   */
   private static String findMainClass(
       ImmutableList<Path> classpathFiles, EventDispatcher eventDispatcher) {
-    // Walks any directories in the classpath.
+    // Gets all files in all subdirectories of classpathFiles.
     ImmutableList<Path> flatFiles =
         classpathFiles
             .stream()
@@ -212,10 +216,11 @@ public class Main {
                   return Stream.of(classpathFile);
                 })
             .collect(ImmutableList.toImmutableList());
+    flatFiles.forEach(file -> System.out.println("FILE: " + file));
 
     // Finds the main class in all the classpath files.
-    MainClassFinder mainClassFinder = new MainClassFinder(flatFiles, eventDispatcher);
-    MainClassFinder.Result mainClassFinderResult = mainClassFinder.find();
+    MainClassFinder.Result mainClassFinderResult =
+        new MainClassFinder(flatFiles, eventDispatcher).find();
     switch (mainClassFinderResult.getType()) {
       case MAIN_CLASS_FOUND:
         return mainClassFinderResult.getFoundMainClass();

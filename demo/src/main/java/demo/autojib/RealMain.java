@@ -14,7 +14,7 @@
  * the License.
  */
 
-package coollog.experiments.autojib.test;
+package demo.autojib;
 
 import java.util.Arrays;
 

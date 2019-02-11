@@ -42,11 +42,11 @@ class ClasspathResolver {
     if (javaClasspath == null) {
       throw new IllegalStateException("Cannot find classpath");
     }
+    List<String> classpath = Lists.reverse(Lists.newArrayList(Splitter.on(":").split(javaClasspath)));
 
     ImmutableList.Builder<Path> classpathFiles = ImmutableList.builder();
     // Reverses the classpathElements due to classpath precedence.
-    for (String classpathElement :
-        Lists.reverse(Lists.newArrayList(Splitter.on(":").split(javaClasspath)))) {
+    for (String classpathElement : classpath) {
       classpathFiles.addAll(getClasspathFiles(classpathElement));
     }
     return classpathFiles.build();
